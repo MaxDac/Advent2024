@@ -32,13 +32,40 @@ defmodule Day2Test do
     end
   end
 
-  describe "is_safe?/1 returns safe interval" do
-    ls = [29, 28, 25, 24, 23, 20]
-    assert Day2.is_safe?(ls)
-  end
+  describe "is_safe?/2" do
+    test "returns safe interval" do
+      ls = [29, 28, 25, 24, 23, 20]
+      assert Day2.is_safe?(ls)
+    end
 
-  describe "is_safe?/1 returns safe interval with one faulty report" do
-    ls = [29, 30, 28, 25, 24, 23, 20]
-    assert Day2.is_safe?(ls)
+    test "returns safe interval with one faulty report" do
+      ls = [29, 30, 28, 25, 24, 23, 20]
+      assert Day2.is_safe?(ls)
+    end
+
+    test "returns not safe interval with one faulty report" do
+      ls = [29, 30, 25, 24, 23, 20]
+      refute Day2.is_safe?(ls)
+    end
+
+    test "returns safe interval with first one faulty report" do
+      ls = [34, 29, 28, 25, 24, 23, 20]
+      assert Day2.is_safe?(ls)
+    end
+
+    test "returns safe interval from test data 1" do
+      ls = [8, 6, 4, 4, 1]
+      assert Day2.is_safe?(ls)
+    end
+
+    test "returns safe interval from test data 2" do
+      ls = [1, 3, 2, 4, 5]
+      assert Day2.is_safe?(ls)
+    end
+
+    test "test from production 1" do
+      ls = [44, 47, 50, 51, 53, 54, 53]
+      assert Day2.is_safe?(ls)
+    end
   end
 end

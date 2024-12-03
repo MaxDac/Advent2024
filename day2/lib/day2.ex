@@ -7,7 +7,7 @@ defmodule Day2 do
 
   def part_one(file_name \\ "test-data") do
     fetch_data("./lib/#{file_name}.txt")
-    |> Enum.filter(&is_safe?/1)
+    |> Enum.filter(fn x -> is_safe?(x) end)
     |> Enum.count()
   end
 
@@ -18,32 +18,65 @@ defmodule Day2 do
     |> Enum.map(fn ls -> Enum.map(ls, &String.to_integer/1) end)
   end
 
-  def is_safe?(ls)
+  def is_safe?(ls) do
+    case is_safe_internal?(ls) do
+      {false, index} ->
+        # Getting the results using lists without indexes from direct neighbourhood of the given index
+        # Not optimal, but still O(n)
+        [result1, result2, result3] =
+          -1..1
+          |> Enum.map(fn d ->
+            ls
+            |> remove_index(index + d)
+            |> is_safe_internal?()
+          end)
 
-  def is_safe?([]), do: false    # malformed
-  def is_safe?([_]), do: false   # malformed
+        case {result1, result2, result3} do
+          {true, _, _} -> true
+          {_, true, _} -> true
+          {_, _, true} -> true
+          _ -> false
+        end
 
-  def is_safe?([first | [second | _]]) when not is_safe_interval(first, second), do: false
+      _ -> true
+    end
+  end
 
-  def is_safe?([first | [second | _] = rest]) do
+  defp is_safe_internal?(ls)
+
+  defp is_safe_internal?([]), do: false    # malformed
+  defp is_safe_internal?([_]), do: false   # malformed
+
+  defp is_safe_internal?([first | [second | _]]) when 
+    not is_safe_interval(first, second), do: 
+      {false, 0}
+
+  defp is_safe_internal?([first | [second | _] = rest]) do
     up_or_down = if second > first, do: :up, else: :down
 
-    result = 
+    result =
       rest
-      |> Enum.reduce_while({first, up_or_down}, fn
-        el, {prev, _} when not is_safe_interval(prev, el) -> 
-          {:halt, false}
+      |> Enum.reduce_while({first, up_or_down, 0}, fn
+        el, {prev, _, idx} when not is_safe_interval(prev, el) -> 
+          {:halt, {false, idx}}
 
-        el, {prev, :up} when is_down_interval(prev, el) ->
-          {:halt, false}
+        el, {prev, :up, idx} when is_down_interval(prev, el) ->
+          {:halt, {false, idx}}
 
-        el, {prev, :down} when is_up_interval(prev, el) -> 
-          {:halt, false}
+        el, {prev, :down, idx} when is_up_interval(prev, el) -> 
+          {:halt, {false, idx}}
 
-        el, {_, up_or_down} -> 
-          {:cont, {el, up_or_down}}
+        el, {_, up_or_down, idx} -> 
+          {:cont, {el, up_or_down, idx + 1}}
       end)
 
-    if result == false, do: false, else: true
+    case result do
+      {false, _} = r -> r
+      _ -> true
+    end
+  end
+
+  defp remove_index(ls, index) do
+    for {item, idx} <- Enum.with_index(ls), idx != index, do: item
   end
 end
