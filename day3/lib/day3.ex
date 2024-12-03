@@ -9,9 +9,15 @@ defmodule Day3 do
   @block_operation "don't()"
   @restart_operation "do()"
 
-  def run(file_name \\ "test-data") do
+  def run() do
+    {time, return_value} = :timer.tc(fn -> run_internal() end)
+    IO.inspect(time, label: "Time")
+    return_value
+  end
+
+  defp run_internal() do
     {_, muls} =
-      fetch_data("./lib/#{file_name}.txt")
+      fetch_data("./lib/data.txt")
       |> Stream.map(&Regex.scan(@mul_regex, &1))
       |> Stream.flat_map(& &1)
       |> Stream.flat_map(& &1)
