@@ -3,8 +3,11 @@ defmodule Day3 do
   Documentation for `Day3`.
   """
 
-  @mul_regex ~r/mul\(\d+,\d+\)/
-  @mul_regex_numbers ~r/mul\((\d+),(\d+)\)/
+  @mul_regex ~r/mul\(\d+,\d+\)|do\(\)|don't\(\)/
+  @mul_regex_numbers ~r/mul\((\d+),(\d+)\)|do\(\)|don't\(\)/
+
+  @block_operation "don't()"
+  @restart_operation "do()"
 
   def run(file_name \\ "test-data") do
     muls =
@@ -13,9 +16,17 @@ defmodule Day3 do
       |> Stream.flat_map(& &1)
       |> Enum.flat_map(& &1)
 
-    muls
-    |> Enum.map(&execute_mul/1)
-    |> Enum.sum()
+    {_, sum} =
+      muls
+      |> Enum.map(&execute_operation/1)
+      |> Enum.reduce({:restart, 0}, fn 
+        {:mul, result}, {:restart, acc} -> {:restart, acc + result}
+        {:mul, _}, {:block, acc} -> {:block, acc}
+        :block, {_, acc} -> {:block, acc}
+        :restart, {_, acc} -> {:restart, acc}
+      end)
+
+    sum
   end
 
   defp fetch_data(path) do
@@ -23,15 +34,11 @@ defmodule Day3 do
     |> Stream.map(&String.trim/1)
   end
   
-  defp execute_mul(mul) do
-    with {num1, num2} <- extract_numbers_from_mul(mul) do
-      num1 * num2
-    end
-   end
-
-  defp extract_numbers_from_mul(mul) do
-    with [_, num1, num2] <- Regex.run(@mul_regex_numbers, mul) do
-      {String.to_integer(num1), String.to_integer(num2)}
+  defp execute_operation(mul) do
+    case Regex.run(@mul_regex_numbers, mul) do
+      [_, num1, num2] -> {:mul, String.to_integer(num1) * String.to_integer(num2)}
+      [@block_operation] -> :block
+      [@restart_operation] -> :restart
     end
   end
 end
