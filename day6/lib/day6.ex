@@ -21,7 +21,45 @@ defmodule Day6 do
       |> get_matrix_element(row, col)
       |> get_guard_direction()
 
-    simulate_guard_run(matrix, matrix_size, cursor_initial_position, guard_direction)
+    {_, visited} = simulate_guard_run(matrix, matrix_size, cursor_initial_position, guard_direction)
+
+    initial_visited = Map.put(%{}, cursor_initial_position, guard_direction)
+
+    :timer.tc(fn ->
+      visited
+      |> Map.keys()
+
+      # Streaming new matrix
+      |> Stream.map(fn pos -> {pos, put_obstacle(matrix, pos)} end)
+
+      # Map sequentially with already streamed new matrix
+      # |> Enum.map(fn {pos, new_matrix} ->
+      #   result = simulate_guard_loop(new_matrix, matrix_size, cursor_initial_position, guard_direction, initial_visited)
+      #   {pos, result}
+      # end)
+
+      # Map in parallel with already streamed new matrix
+      |> Enum.map(fn {pos, new_matrix} ->
+        Task.async(fn -> 
+          result = simulate_guard_loop(new_matrix, matrix_size, cursor_initial_position, guard_direction, initial_visited)
+          {pos, result}
+        end)
+      end)
+      |> Enum.map(&Task.await/1)
+
+      # Mapping matrixes in parallel
+      # |> Stream.map(fn pos ->
+      #   Task.async(fn -> 
+      #     new_matrix = put_obstacle(matrix, pos)
+      #     result = simulate_guard_loop(new_matrix, matrix_size, cursor_initial_position, guard_direction, initial_visited)
+      #     {pos, result}
+      #   end)
+      # end)
+      # |> Stream.map(&Task.await/1)
+
+      |> Enum.filter(fn {_, result} -> result == :loop end)
+      |> Enum.count()
+    end)
   end
 
   defp read_file(file_name) do
@@ -49,13 +87,38 @@ defmodule Day6 do
     end)
   end
 
+  def put_obstacle(matrix, {row, col} = _obstacle_position) do
+    Map.update(matrix, row, "", &replace_char(&1, col, @block_char))
+  end
+
+  def simulate_guard_loop(matrix, n, guard_position, direction, visited) do
+    case find_next_obstacle(matrix, guard_position, direction, n) do
+      {:out, _last_position} ->
+        #Out of the field, no loop
+        :out
+      ^guard_position ->
+        simulate_guard_loop(matrix, n, guard_position, change_guard_direction(direction), visited)
+      last_position -> 
+        if Map.has_key?(visited, last_position) do
+          :loop
+        else
+          simulate_guard_loop(
+            matrix, 
+            n, 
+            last_position, 
+            change_guard_direction(direction), 
+            Map.put(visited, last_position, direction))
+        end
+    end
+  end
+
   def simulate_guard_run(matrix, n, guard_position, direction, visited \\ %{}) do
     case find_next_obstacle(matrix, guard_position, direction, n) do
       {:out, last_position} -> 
         visited = 
           visited
-          |> compute_visited_positions(guard_position, last_position)
-          |> Enum.count()
+          |> compute_visited_positions(guard_position, last_position, direction)
+          # |> Enum.count()
 
         {last_position, visited}
       last_position -> 
@@ -64,21 +127,21 @@ defmodule Day6 do
           n, 
           last_position, 
           change_guard_direction(direction), 
-          compute_visited_positions(visited, guard_position, last_position))
+          compute_visited_positions(visited, guard_position, last_position, direction))
     end
   end
 
-  def compute_visited_positions(visited, starting_point, ending_point)
+  def compute_visited_positions(visited, starting_point, ending_point, direction)
 
-  def compute_visited_positions(visited, {row, s_col}, {row, e_col}) do
+  def compute_visited_positions(visited, {row, s_col}, {row, e_col}, direction) do
     Enum.reduce(s_col..e_col, visited, fn col, acc ->
-      Map.put_new(acc, {row, col}, true)
+      Map.put_new(acc, {row, col}, direction)
     end)
   end
 
-  def compute_visited_positions(visited, {s_row, col}, {e_row, col}) do
+  def compute_visited_positions(visited, {s_row, col}, {e_row, col}, direction) do
     Enum.reduce(s_row..e_row, visited, fn row, acc ->
-      Map.put_new(acc, {row, col}, true)
+      Map.put_new(acc, {row, col}, direction)
     end)
   end
 
@@ -119,7 +182,7 @@ defmodule Day6 do
     
   end
 
-  def find_next_obstacle(matrix, {row, col}, :left, n) do
+  def find_next_obstacle(matrix, {row, col}, :left, _) do
     reversed_block_col = 
       matrix
       |> Map.get(row)
@@ -177,5 +240,11 @@ defmodule Day6 do
   def first_element([], _), do: []
   def first_element([first | rest], f) do
     if f.(first), do: [first], else: first_element(rest, f)
+  end
+
+  def replace_char(string, index, replacement) do
+    prefix = String.slice(string, 0, index)
+    suffix = String.slice(string, index + 1, String.length(string) - index - 1)
+    prefix <> replacement <> suffix
   end
 end
