@@ -5,7 +5,7 @@ defmodule Day7 do
 
   @result_operand_divider ":"
   @operand_divider " "
-  @operations [:sum, :times, :pipe]
+  @operations [:times, :pipe, :sum]
 
   def part1(file_name \\ "test-data") do
     input = read_file(file_name)
@@ -15,14 +15,13 @@ defmodule Day7 do
       |> Enum.map(fn {_, operands} -> Enum.count(operands) end)
       |> Enum.min_max()
       |> generate_operations_permutations()
-      |> IO.inspect(label: "operations")
 
     :timer.tc(fn ->
       input
-      |> Enum.map(fn o -> 
+      |> Enum.map(fn {expected_result, _} = o -> 
         Task.async(fn ->
-          check_result = check_line(o, operations_map)
-          {o, check_result} |> IO.inspect(label: "Check result")
+          check_result = check_line(o, operations_map, expected_result)
+          {o, check_result}
         end)
       end)
       |> Enum.map(&Task.await/1)
@@ -71,8 +70,8 @@ defmodule Day7 do
     end
   end
 
-  def check_line({expected_result, operands}, operations_map) do
-    results = perform_line_operations(operands, operations_map)
+  def check_line({expected_result, operands}, operations_map, max) do
+    results = perform_line_operations(operands, operations_map, max)
 
     Enum.reduce_while(results, false, fn r, _ ->
       if expected_result == r,
@@ -81,25 +80,36 @@ defmodule Day7 do
     end)
   end
 
-  def perform_line_operations(operands, operations_map) do
+  def perform_line_operations(operands, operations_map, max) do
     n = Enum.count(operands)
     operations = Map.get(operations_map, n - 1)
 
-    Enum.map(operations, &perform_operation(operands, &1))
+    Enum.map(operations, &perform_operation(operands, &1, max))
   end
 
-  def perform_operation(operands, operations)
+  def perform_operation(operands, operations, max)
 
-  def perform_operation([acc], _), do: acc
+  def perform_operation([acc], _, _), do: acc
     
-  def perform_operation([op1 | [op2 | rest]], [:sum | rest_op]), do: 
-    perform_operation([op1 + op2 | rest], rest_op)
+  def perform_operation([op1 | [op2 | _]], [:sum | _], max) when op1 + op2 > max, do: max + 1
 
-  def perform_operation([op1 | [op2 | rest]], [:times | rest_op]), do:
-    perform_operation([op1 * op2 | rest], rest_op)
+  def perform_operation([op1 | [op2 | _]], [:times | _], max) when op1 * op2 > max, do: max + 1
 
-  def perform_operation([op1 | [op2 | rest]], [:pipe | rest_op]), do:
-    perform_operation([concat(op1, op2) | rest], rest_op)
+  def perform_operation([op1 | [op2 | rest]], [:sum | rest_op], max), do: 
+    perform_operation([op1 + op2 | rest], rest_op, max)
+
+  def perform_operation([op1 | [op2 | rest]], [:times | rest_op], max), do:
+    perform_operation([op1 * op2 | rest], rest_op, max)
+
+  def perform_operation([op1 | [op2 | rest]], [:pipe | rest_op], max) do
+    result = concat(op1, op2)
+
+    if result > max do
+      max + 1
+    else
+      perform_operation([result | rest], rest_op, max)
+    end
+  end
 
   def concat(a, b) do
     get_digits(a)
