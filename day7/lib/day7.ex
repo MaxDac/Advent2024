@@ -5,7 +5,7 @@ defmodule Day7 do
 
   @result_operand_divider ":"
   @operand_divider " "
-  @operations [:sum, :times]
+  @operations [:sum, :times, :pipe]
 
   def part1(file_name \\ "test-data") do
     input = read_file(file_name)
@@ -15,11 +15,19 @@ defmodule Day7 do
       |> Enum.map(fn {_, operands} -> Enum.count(operands) end)
       |> Enum.min_max()
       |> generate_operations_permutations()
+      |> IO.inspect(label: "operations")
 
     :timer.tc(fn ->
       input
-      |> Stream.filter(&check_line(&1, operations_map))
-      |> Stream.map(fn {result, _} -> result end)
+      |> Enum.map(fn o -> 
+        Task.async(fn ->
+          check_result = check_line(o, operations_map)
+          {o, check_result} |> IO.inspect(label: "Check result")
+        end)
+      end)
+      |> Enum.map(&Task.await/1)
+      |> Enum.filter(fn {_, check_result} -> check_result end)
+      |> Enum.map(fn {{result, _}, _} -> result end)
       |> Enum.sum()
     end)
   end
@@ -89,4 +97,19 @@ defmodule Day7 do
 
   def perform_operation([op1 | [op2 | rest]], [:times | rest_op]), do:
     perform_operation([op1 * op2 | rest], rest_op)
+
+  def perform_operation([op1 | [op2 | rest]], [:pipe | rest_op]), do:
+    perform_operation([concat(op1, op2) | rest], rest_op)
+
+  def concat(a, b) do
+    get_digits(a)
+    |> Enum.concat(get_digits(b))
+    |> Enum.reverse()
+    |> Enum.with_index()
+    |> Enum.reduce(0, fn {n, index}, acc -> n * floor(:math.pow(10, index)) + acc end)
+  end
+
+  def get_digits(n, acc \\ [])
+  def get_digits(0, acc), do: acc
+  def get_digits(n, acc), do: get_digits(div(n, 10), [rem(n, 10) | acc])
 end
