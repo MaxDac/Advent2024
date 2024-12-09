@@ -11,6 +11,7 @@ defmodule Day9 do
 
       optimise_user_disk(disk_map, reversed_disk_map)
       |> compute_checksum()
+      # |> print_disk_map()
     end)
   end
 
@@ -23,7 +24,7 @@ defmodule Day9 do
     line
   end
 
-  @spec map_disk_space(line :: String.t()) :: list(DiskSpace.t())
+  @spec map_disk_space(line :: String.t()) :: {list(DiskSpace.t()), list(DiskSpace.t())}
   def map_disk_space(line) do
     {_, list, _} =
       line
@@ -53,63 +54,76 @@ defmodule Day9 do
           {index, ls, :filled}
       end)
 
-    {Enum.reverse(list), list}
+    {Enum.reverse(list), filter_empty_values(list)}
   end
 
-  def optimise_user_disk(disk_map, reversed_disk_map, acc \\ [])
-
-  def optimise_user_disk(
-      [%DiskSpace{index: index} | _],
-      [%DiskSpace{index: index} = remaining_item | _],
-      acc) when not is_nil(index) do
-    [remaining_item | acc]    
-    |> Enum.reverse()
+  def filter_empty_values(disk_map) do
+    Enum.filter(disk_map, fn %DiskSpace{is_empty: is_empty} -> not is_empty end)
   end
 
-  def optimise_user_disk([%DiskSpace{is_empty: false} = item | rest], reversed_disk_map, acc) do
-    optimise_user_disk(rest, reversed_disk_map, [item | acc])
-  end
+  def optimise_user_disk(disk_map, reversed_disk_map)
 
-  def optimise_user_disk(
-      [%DiskSpace{is_empty: true, size: empty_size} = item | rest], 
-      [%DiskSpace{is_empty: false, size: filled_size} = filled_item | rev_rest], 
-      acc) do
-    case filled_size - empty_size do
-      0 -> optimise_user_disk(
-        rest, 
-        rev_rest, 
-        [filled_item | acc])
+  def optimise_user_disk(disk_map, []), do: disk_map
 
-      ds when ds > 0 -> optimise_user_disk(
-        rest, 
-        [%{filled_item | size: ds} | rev_rest], 
-        [%{filled_item | size: empty_size} | acc])
+  def optimise_user_disk(disk_map, [%DiskSpace{size: size, index: index} = item | rest]) do
+    case split_map_in_empty_space(disk_map, size, index) do
+      {nil, _} ->
+        optimise_user_disk(disk_map, rest)
 
-      ds -> optimise_user_disk(
-        [%{item | size: ds * -1} | rest], 
-        rev_rest,
-        [%{filled_item | size: filled_size} | acc])
+      {%DiskSpace{size: ^size}, pre, post} ->
+        new_list = Enum.concat(pre, [item | remove_moved_item(post, index)])
+        optimise_user_disk(new_list, rest)
+
+      {%DiskSpace{size: empty_size} = empty_item, pre, post} ->
+        new_empty_item = %{empty_item | size: empty_size - size}
+        new_list = Enum.concat(pre, [item | [new_empty_item | remove_moved_item(post, index)]])
+        optimise_user_disk(new_list, rest)
     end
   end
 
-  def optimise_user_disk(
-      disk_map, 
-      [_ | reversed_disk_map], 
-      acc) do
-    optimise_user_disk(disk_map, reversed_disk_map, acc)
+  def split_map_in_empty_space(disk_map, required_size, moving_index) do
+    case Enum.split_while(disk_map, fn
+      %DiskSpace{index: ^moving_index} -> false
+      %DiskSpace{is_empty: false} -> true
+      %DiskSpace{size: size} when size < required_size -> true
+      _ -> false
+    end) do
+      {_, [%DiskSpace{index: ^moving_index} | _]} -> 
+        {nil, disk_map}
+
+      {pre, [selected_spot | post]} -> 
+        {selected_spot, pre, post}
+
+      _ -> 
+        {nil, disk_map}
+    end
+  end
+
+  def remove_moved_item(disk_map, item_index) do
+    Enum.map(disk_map, fn 
+      %DiskSpace{index: ^item_index, size: size} -> %DiskSpace{is_empty: true, size: size}
+      item -> item
+     end)
   end
 
   def print_disk_map(disk_map) do
     disk_map
     |> Enum.map(fn 
-      %DiskSpace{index: index, size: size} -> String.duplicate(Integer.to_string(index), size)
+      %DiskSpace{index: index, size: size} when not is_nil(index) -> String.duplicate(Integer.to_string(index), size)
+      %DiskSpace{size: size} -> String.duplicate(".", size)
     end)
     |> Enum.join()
   end
 
   def compute_checksum(disk_map) do
     disk_map
-    |> Enum.flat_map(&List.duplicate(&1.index, &1.size))
+    |> Enum.flat_map(fn 
+      %DiskSpace{index: index, size: size} when not is_nil(index) ->
+        List.duplicate(index, size)
+
+      %DiskSpace{size: size} ->
+        List.duplicate(0, size)
+    end)
     |> Enum.with_index()
     |> Enum.map(fn {chunk_index, index} -> chunk_index * index end)
     |> Enum.sum()
